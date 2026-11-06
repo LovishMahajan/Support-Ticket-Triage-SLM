@@ -1,11 +1,19 @@
 # Enterprise Support Ticket Triage SLM
 
 **Document:** `docs/behavior-spec.md`  
-**Version:** 1.0  
-**Status:** Draft — Phase 0  
+**Version:** 1.1  
+**Status:** Phase 0 — aligned with policy v1.1  
 **Primary behavior:** Enterprise support ticket triage  
 **Model family:** Small Qwen model + LoRA  
-**Policy scope:** Generic enterprise support environment
+**Policy scope:** Generic enterprise support environment  
+**Policy version:** `support-triage-policy-v1.1` (`docs/policy.md`; authoritative wherever this spec and the policy differ)
+
+## Change history
+
+| Version | Date | Change |
+|---|---|---|
+| 1.0 | — | Initial behavior contract. |
+| 1.1 | 2026-10-15 | Aligned with `support-triage-policy-v1.1` after the 30-example pilot found three policy gaps: (1) **payment boundary** — confirmed financial cause → BILLING, confirmed technical cause → ENGINEERING, cause not stated → REQUEST_MORE_INFORMATION (§7.3, §8.7, §10.4); (2) **multi-issue tickets** — classify the highest-priority actionable issue (§8.8); (3) **HUMAN_REVIEW semantics** — facts are sufficient but policy requires a human/business decision; never "hard" or "unsure" (§7.6, §8.6). Removed "materially ambiguous" as a HUMAN_REVIEW trigger. Precedence marked as pilot-validated (§9). See `docs/decisions.md`. |
 
 ---
 
@@ -308,7 +316,7 @@ Use when the primary issue concerns:
 - incorrect invoices
 - duplicate charges
 - subscription charges
-- payment failures
+- payment failures with a confirmed account/financial cause (declined card, unpaid balance)
 - refunds
 - billing configuration
 - plan charges
@@ -323,6 +331,8 @@ Decision:
 ```text
 ROUTE_TO_BILLING
 ```
+
+A payment failure with a confirmed **technical** cause goes to engineering, and one with **no stated cause** goes to information gathering (payment boundary, §8.7).
 
 ---
 
@@ -371,19 +381,22 @@ The model should recognize the known procedure rather than route every authentic
 
 ## 7.6 HUMAN_REVIEW
 
-Use when the policy explicitly requires human judgment because the case is:
+Use when **the facts are sufficient, but the policy requires a human or business decision**. Typical cases:
 
-- exceptional
-- materially ambiguous despite sufficient information
-- legally/commercially sensitive
-- outside established policy
-- dependent on a business decision that cannot be safely automated
+- contract exceptions
+- discretionary or non-standard refunds
+- requests needing business approval or authorization
+- legally/commercially sensitive requests outside the standard workflow
 
 `HUMAN_REVIEW` is **not** synonymous with:
 
 > "The model finds this example difficult."
 
-A difficult but policy-resolvable ticket must still receive its correct operational decision.
+nor with:
+
+> "The annotator is unsure."
+
+A difficult but policy-resolvable ticket must still receive its correct operational decision. If facts are missing, the label is `REQUEST_MORE_INFORMATION`, not `HUMAN_REVIEW` (policy v1.1).
 
 ---
 
@@ -491,7 +504,37 @@ HUMAN_REVIEW
 
 This is not simply a case where the model "doesn't know."
 
-The policy itself requires a human decision.
+The policy itself requires a human decision. The facts are complete; what is missing is authority, not information.
+
+---
+
+## 8.7 Payment boundary (policy v1.1)
+
+Payment problems are routed by their **confirmed cause**, not by the word "payment":
+
+| Evidence in the ticket | Decision |
+|---|---|
+| Confirmed account/financial cause: declined card, wrong invoice, duplicate charge, unpaid balance | `ROUTE_TO_BILLING` |
+| Confirmed technical cause: checkout returns HTTP 500, payment service timing out | `ROUTE_TO_ENGINEERING` |
+| Cause not stated: "payment isn't working" | `REQUEST_MORE_INFORMATION` |
+
+---
+
+## 8.8 Multi-issue tickets (policy v1.1)
+
+Classify the **highest-priority actionable issue**. Secondary issues change nothing unless they alter the risk, ownership or urgency of the primary issue.
+
+Example:
+
+> "Our dashboard has been returning 500 errors since this morning. Separately, we'd like to discuss an exception to our contract terms."
+
+Correct:
+
+```text
+ROUTE_TO_ENGINEERING
+```
+
+The contract exception would be `HUMAN_REVIEW` on its own, but the production failure is the highest-priority actionable issue.
 
 ---
 
@@ -510,7 +553,7 @@ When multiple valid signals occur, the initial policy precedence is:
 
 This precedence is a **project design decision**, not a requirement from the mentor brief.
 
-It must be validated against the dataset and explicitly documented before training.
+It held up in the 30-example pilot (v1.1). It is re-validated during full-dataset review (human–matrix agreement, build plan Phase 3) and documented in `docs/policy.md` before training.
 
 ### Important rule
 
@@ -606,21 +649,15 @@ without considering the complete ticket.
 
 > "My payment failed because the checkout API returns an error."
 
-The dataset must establish whether the operational owner is:
-
-```text
-ROUTE_TO_BILLING
-```
-
-or:
+**Resolved in policy v1.1** by the payment boundary (§8.7). The ticket states a technical cause (the checkout API returns an error), so:
 
 ```text
 ROUTE_TO_ENGINEERING
 ```
 
-based on the defined policy.
+By contrast, "My payment failed because my card was declined" → `ROUTE_TO_BILLING`, and "My payment isn't working" → `REQUEST_MORE_INFORMATION`.
 
-This is precisely the type of ambiguity that must be resolved **before dataset generation**, not after the model is trained.
+This was exactly the kind of ambiguity that had to be resolved **before dataset generation**. The pilot surfaced it, and the boundary is now part of the policy and must be represented explicitly in the dataset.
 
 ---
 
@@ -829,7 +866,7 @@ Accuracy specifically on deliberately difficult cases.
 
 # 16. Initial Success Criteria
 
-These are project targets and will be frozen before the training experiment.
+These are project targets and will be frozen before the training experiment. The authoritative pre-registered version lives in `docs/evaluation.md` §2. It allows exactly one revision, after the base baseline and before any LoRA run.
 
 | Criterion | Target |
 |---|---:|

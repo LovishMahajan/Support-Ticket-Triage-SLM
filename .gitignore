@@ -1,0 +1,35 @@
+# Secrets
+
+# Python / tooling
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Data: raw LLM logs and scratch never committed (plan §12)
+data/raw/_scratch/
+data/raw/_logs/
+
+# Training: checkpoints live on Tinker; only IDs are committed
+training/runs/*/checkpoints/
+
+# Rendered media and LaTeX build output
+lora-video/render/
+lora-video/media/
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.out
+paper/*.toc
+paper/*.synctex.gz
+
+# OS / editors
+.DS_Store
+.idea/
+config.bat
+node_modules
